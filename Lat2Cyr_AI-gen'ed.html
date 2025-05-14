@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不正规西里尔字母转换工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        textarea, .result {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: 2px solid #e0e6ed;
+            border-radius: 8px;
+            min-height: 100px;
+            font-size: 16px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .result-container {
+            position: relative;
+        }
+        .result-actions {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+            display: flex;
+            gap: 5px;
+        }
+        .result-actions button {
+            background: #333;
+            color: white;
+            border: 1px solid #222;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .result-actions button:hover {
+            background: #555;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            flex: 1;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .active-mode {
+            background-color: #2c3e50;
+        }
+        .info {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .transcription-table {
+            margin-top: 30px;
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .transcription-table h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        .transcription-pairs {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+        .transcription-pair {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .latin {
+            font-weight: bold;
+            margin-right: 10px;
+            width: 50px;
+        }
+        .cyrillic {
+            font-size: 18px;
+        }
+        .placeholder {
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>不正规西里尔字母转换工具</h1>
+        
+        <div class="button-group">
+            <button class="active-mode" id="cyrillicBtn" onclick="setMode('cyrillic')">显示西里尔字母</button>
+            <button onclick="convertToUpperCase()" title="将西里尔字母转为大写">转换为大写</button>
+            <button id="translitBtn" onclick="setMode('translit')">改为拉丁转写</button>
+        </div>
+
+        <textarea id="inputText" placeholder="在此输入…" oninput="convertText()" onkeydown="handleEnterKey(event)"></textarea>
+        
+        <div class="result-container">
+            <div class="result-actions">
+                <button onclick="copyResult()">复制</button>
+                <button onclick="cutResult()">剪切</button>
+                <button onclick="clearResult()">清空</button>
+            </div>
+            <div id="result" class="result placeholder">在此输出…</div>
+        </div>
+        
+        <div class="info">
+            <p>输入规则：</p>
+            <ul>
+                <li>大小写拉丁字母 → 小写西里尔字母（如 a→а, A→ѣ）</li>
+                <li>识别字母组合（如 ch→ч, ya-→ѭ）</li>
+                <li>撇号 (') 用于切分组合（如 y'o→йо 而 yo→ё）</li>
+            </ul>
+        </div>
+
+        <div class="transcription-table">
+            <h2>字母对照表</h2>
+            <ul><li>使用26个字母，外加撇号 (') 和减号 (-)</li></ul>
+            <div class="transcription-pairs" id="transcriptionPairs">
+                <!-- 将通过JavaScript动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const conversionMap = {
+            // 说明：键位→[西里尔，转写]
+            'a': ['а', 'a'],
+            'b': ['б', 'b'],
+            'v': ['в', 'v'],
+            'g': ['г', 'g'],
+            'd': ['д', 'd'],
+            'e': ['е', 'e'],
+            'z': ['з', 'z'],
+            'y': ['й', 'y'],
+            'k': ['к', 'k'],
+            'l': ['л', 'l'],
+            'm': ['м', 'm'],
+            'n': ['н', 'n'],
+            'o': ['о', 'o'],
+            'p': ['п', 'p'],
+            'r': ['р', 'r'],
+            's': ['с', 's'],
+            't': ['т', 't'],
+            'w': ['у', 'w'],
+            'f': ['ф', 'f'],
+            'h': ['х', 'h'],
+            'c': ['ц', 'c'],
+            'x': ['ъ', 'ŭ'],
+            'i': ['і', 'i'],
+            'j': ['ы', 'ı'],
+            'u': ['ұ', 'u'],
+            'q': ['қ', 'q'],
+            'R': ['ж', 'ŕ'],
+            'I': ['и', 'ï'],
+            'X': ['щ', 'xî'],
+            'Y': ['ь', 'í'],
+            'E': ['э', 'è'],
+            'F': ['ѳ', 'þ'],
+            'J': ['ђ', 'jî'],
+            'Q': ['ћ', 'qî'],
+            'W': ['ў', 'ƿ'],
+            'C': ['џ', 'ż'],
+            'A': ['ѣ', 'ä'],
+            'G': ['ґ', 'kh'],
+            'U': ['ү', 'ü'],
+            'O': ['ө', 'ö'],
+            'N': ['ң', 'ŋ'],
+            'ch': ['ч', 'ch'],
+            'sh': ['ш', 'sh'],
+            'gh': ['ғ', 'ğ'],
+            'zh': ['җ', 'zh'],
+            'qh': ['ә', 'ĕ'],
+            'yu': ['ю', 'ýu'],
+            'ya': ['я', 'ýa'],
+            'yo': ['ё', 'ýo'],
+            'ye': ['є', 'ýe'],
+            'e-': ['ѧ', 'ę'],
+            'ye-': ['ѩ', 'ýę'],
+            'a-': ['ѫ', 'ą'],
+            'ya-': ['ѭ', 'ýą'],
+            "'": ["", ""]
+        };
+
+        // 按组合长度排序（优先匹配长组合）
+        const sortedKeys = Object.keys(conversionMap).sort((a,b) => b.length - a.length);
+        let currentMode = 'cyrillic';
+
+        // 处理回车键
+        function handleEnterKey(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                convertText();
+            }
+        }
+
+        // 初始化对照表
+        function initTranscriptionTable() {
+            const pairsContainer = document.getElementById('transcriptionPairs');
+            const commonPairs = [
+                ['a', 'а'], ['b', 'б'], ['c', 'ц'], ['d', 'д'],
+                ['e', 'е'], ['f', 'ф'], ['g', 'г'], ['h', 'х'],
+                ['i', 'і'], ['j', 'ы'], ['k', 'к'], ['l', 'л'],
+                ['m', 'м'], ['n', 'н'], ['o', 'о'], ['p', 'п'],
+                ['q', 'қ'], ['r', 'р'], ['s', 'с'], ['t', 'т'],
+                ['u', 'ұ'], ['v', 'в'], ['w', 'у'], ['x', 'ъ'],
+                ['y', 'й'], ['z', 'з'], ["'", '分词'], ['qh', 'ә'],
+                ['zh', 'җ'], ['ch', 'ч'], ['sh', 'ш'], ['gh', 'ғ'],
+                ['ye', 'є'], ['yo', 'ё'], ['yu', 'ю'], ['ya', 'я'],
+                ['e-', 'ѧ'], ['ye-', 'ѩ'], ['a-', 'ѫ'], ['ya-', 'ѭ'],
+                ['A', 'ѣ'], ['C', 'џ'], ['E', 'э'], ['F', 'ѳ'],
+                ['G', 'ґ'], ['I', 'и'], ['J', 'ђ'], ['N', 'ң'],
+                ['O', 'ө'], ['Q', 'ћ'], ['R', 'ж'], ['U', 'ү'],                 
+                ['W', 'ў'], ['X', 'щ'], ['Y', 'ь']
+            ];
+            
+            pairsContainer.innerHTML = '';
+            commonPairs.forEach(pair => {
+                const pairElement = document.createElement('div');
+                pairElement.className = 'transcription-pair';
+                pairElement.innerHTML = `
+                    <span class="latin">${pair[0]}</span>
+                    <span class="cyrillic">${pair[1]}</span>
+                `;
+                pairsContainer.appendChild(pairElement);
+            });
+        }
+
+        // 复制功能
+        function copyResult() {
+            const result = document.getElementById('result');
+            if (result.textContent === '在此输出…') return;
+            
+            navigator.clipboard.writeText(result.textContent)
+                .then(() => alert('已复制到剪贴板'))
+                .catch(err => console.error('复制失败:', err));
+        }
+
+        // 剪切功能
+        function cutResult() {
+            const result = document.getElementById('result');
+            if (result.textContent === '在此输出…') return;
+            
+            navigator.clipboard.writeText(result.textContent)
+                .then(() => {
+                    result.textContent = '在此输出…';
+                    result.classList.add('placeholder');
+                    alert('已剪切到剪贴板');
+                })
+                .catch(err => console.error('剪切失败:', err));
+        }
+
+        // 清空功能
+        function clearResult() {
+            const result = document.getElementById('result');
+            result.textContent = '在此输出…';
+            result.classList.add('placeholder');
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.getElementById('cyrillicBtn').classList.toggle('active-mode', mode === 'cyrillic');
+            document.getElementById('translitBtn').classList.toggle('active-mode', mode === 'translit');
+            convertText();
+        }
+
+        function convertText() {
+            const input = document.getElementById('inputText').value;
+            let output = '';
+            let i = 0;
+            
+            while (i < input.length) {
+                let maxLength = Math.min(4, input.length - i);
+                let matched = false;
+                
+                // 优先尝试精确匹配（包括大小写）
+                for (let len = maxLength; len >= 1; len--) {
+                    const substr = input.substr(i, len);
+                    const key = sortedKeys.find(k => k === substr);
+                    
+                    if (key) {
+                        const [cyr, trans] = conversionMap[key];
+                        output += currentMode === 'cyrillic' ? cyr : trans;
+                        i += len;
+                        matched = true;
+                        break;
+                    }
+                }
+                
+                if (!matched) {
+                    // 尝试忽略大小写匹配
+                    for (let len = maxLength; len >= 1; len--) {
+                        const substr = input.substr(i, len);
+                        const key = sortedKeys.find(k => k.toLowerCase() === substr.toLowerCase());
+                        
+                        if (key) {
+                            const original = input.substr(i, len);
+                            const isUpperCase = original === original.toUpperCase();
+                            const [cyr, trans] = conversionMap[key];
+                            let result = currentMode === 'cyrillic' ? cyr : trans;
+                            
+                            if (currentMode === 'cyrillic' && isUpperCase && len === 1) {
+                                result = conversionMap[original]?.[0] || result;
+                            }
+                            
+                            output += result;
+                            i += len;
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!matched) {
+                    output += input[i];
+                    i++;
+                }
+            }
+            
+            const resultElement = document.getElementById('result');
+            resultElement.textContent = output || '在此输出…';
+            output ? resultElement.classList.remove('placeholder') : resultElement.classList.add('placeholder');
+        }
+
+        function convertToUpperCase() {
+            const result = document.getElementById('result');
+            if (result.textContent === '在此输出…') return;
+            
+            const cyrillicUpperMap = {
+                'а': 'А', 'б': 'Б', 'в': 'В', 'г': 'Г',
+                'д': 'Д', 'е': 'Е', 'ж': 'Ж', 'з': 'З',
+                'и': 'И', 'й': 'Й', 'к': 'К', 'л': 'Л',
+                'м': 'М', 'н': 'Н', 'о': 'О', 'п': 'П',
+                'р': 'Р', 'с': 'С', 'т': 'Т', 'у': 'У',
+                'ф': 'Ф', 'х': 'Х', 'ц': 'Ц', 'ч': 'Ч',
+                'ш': 'Ш', 'щ': 'Щ', 'ъ': 'Ъ', 'ы': 'Ы',
+                'ь': 'Ь', 'э': 'Э', 'ю': 'Ю', 'я': 'Я',
+                'ё': 'Ё', 'ђ': 'Ђ', 'є': 'Є', 'і': 'І',
+                'ћ': 'Ћ', 'ў': 'Ў', 'џ': 'Џ', 'ѣ': 'Ѣ',
+                'ѳ': 'Ѳ', 'ґ': 'Ґ', 'ғ': 'Ғ', 'қ': 'Қ',
+                'ң': 'Ң', 'ү': 'Ү', 'ұ': 'Ұ', 'ә': 'Ә',
+                'ө': 'Ө', 'ѧ': 'Ѧ', 'ѩ': 'Ѩ', 'ѫ': 'Ѫ',
+                'ѭ': 'Ѭ'
+            };
+            
+            result.textContent = result.textContent.split('').map(c => 
+                cyrillicUpperMap[c] || c
+            ).join('');
+        }
+
+        // 初始化页面
+        window.onload = function() {
+            initTranscriptionTable();
+        };
+    </script>
+</body>
+</html>
